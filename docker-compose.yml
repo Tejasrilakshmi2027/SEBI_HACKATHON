@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: sebi_postgres
+    environment:
+      POSTGRES_USER: sebi_user
+      POSTGRES_PASSWORD: sebi_password
+      POSTGRES_DB: sebi_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - sebi_network
+
+  # MongoDB Database
+  mongodb:
+    image: mongo:7
+    container_name: sebi_mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: sebi_user
+      MONGO_INITDB_ROOT_PASSWORD: sebi_password
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - sebi_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: sebi_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - sebi_network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sebi_backend
+    environment:
+      DATABASE_URL: postgresql://sebi_user:sebi_password@postgres:5432/sebi_db
+      MONGODB_URL: mongodb://sebi_user:sebi_password@mongodb:27017
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: your-secret-key-change-in-production
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+    volumes:
+      - ./backend/uploads:/app/uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+    networks:
+      - sebi_network
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sebi_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - sebi_network
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
+
+networks:
+  sebi_network:
+    driver: bridge
